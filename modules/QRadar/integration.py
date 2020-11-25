@@ -85,6 +85,9 @@ class Integration(Main):
                 else:
                     self.logger.error("Configuration for observables_in_offense_type is wrongly formatted. Please fix this to enable this functionality")
 
+        # Remove observables that are to be excluded based on the configuration
+        self.artifacts = self.checkObservableExclusionList(self.artifacts)
+        
         # Match observables against the TLP list
         self.artifacts = self.checkObservableTLP(self.artifacts)
 
