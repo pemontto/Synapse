@@ -220,25 +220,26 @@ class Integration(Main):
         for incident in incidentsList:
             self.lexsi_reporting.append(incident['incident'])
 
-        self.logger.info("the list of opened Lexsi Incidents: {}".format(self.lexsi_reporting))
+        self.logger.debug("the list of opened Lexsi Incidents: {}".format(self.lexsi_reporting))
         self.uncommon_elements = self.compare_lists(self.thehiveAlerts, self.lexsi_reporting)
         # self.uncommon_elements=['476121']
-        self.logger.info("Alerts present in TheHive but not in list of opened Lexsi Incidents: {}".format((self.uncommon_elements)))
+        self.logger.debug("Alerts present in TheHive but not in list of opened Lexsi Incidents: {}".format((self.uncommon_elements)))
 
         for element in self.uncommon_elements:
-            self.logger.info("Preparing to change the status for {}".format(element))
+            self.logger.info("Preparing to close the case for {}".format(element))
             self.query = dict()
             self.query['sourceRef'] = str(element)
-            self.logger.info('Looking for incident %s in TheHive alerts', str(element))
-            self.alert = self.theHiveConnector.findAlert(self.query)[0]
-            if 'case' in self.alert:
-                try:
+            self.logger.debug('Looking for incident %s in TheHive alerts', str(element))
+            try:
+                self.alert = self.theHiveConnector.findAlert(self.query)[0]
+                if 'case' in self.alert:
                     # Resolve the case
-                    self.logger.info("AlertID for element {}: {}".format(element, self.case_id))
                     self.case_id = self.alert['case']
-                    self.logger.info("Preparing to resolve the case")
+                    self.logger.debug("AlertID for element {}: {}".format(element, self.case_id))
+                    self.logger.debug("Preparing to resolve the case")
                     self.theHiveConnector.closeCase(self.case_id)
+                    self.logger.debug("Closed case with id {} for {}".format(self.case_id, element))
 
-                except Exception as e:
-                    self.logger.debug(e)
-                    continue
+            except Exception as e:
+                self.logger.error("Could not close case: {}".format(e))
+                continue
