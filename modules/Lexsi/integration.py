@@ -200,13 +200,24 @@ class Integration(Main):
 
     def lexsi_opened_alerts_thehive(self):
         self.thehiveAlerts = []
+        self.open_lexsi_cases = {}
         self.query = In('tags', ['Lexsi'])
 
         self.logger.info('Looking for incident in TheHive alerts with tag Lexsi')
         # self.logger.info(self.query)
         self.results = self.theHiveConnector.findAlert(self.query)
-        for i in self.results:
-            self.thehiveAlerts.append(i['sourceRef'])
+        for alert_found in self.results:
+            # Check if a case is linked
+            if 'case' in alert_found:
+                try:
+                    self.case_found = self.theHiveConnector.getCase(alert_found['case'])
+                    # Check if the status is open. Only then append it to the list
+                    if self.case_found['status'] == "Open":
+                        self.open_lexsi_cases[alert_found['sourceRef']] = self.case_found
+                        self.thehiveAlerts.append(alert_found['sourceRef'])
+                except Exception as e:
+                    self.logger.error("Could not find case: {}".format(e), exc_info=True)
+                    continue
         self.logger.info("Lexsi Alerts opened in theHive: {}".format(self.thehiveAlerts))
         return self.thehiveAlerts
 
@@ -223,7 +234,7 @@ class Integration(Main):
         self.logger.debug("the list of opened Lexsi Incidents: {}".format(self.lexsi_reporting))
         self.uncommon_elements = self.compare_lists(self.thehiveAlerts, self.lexsi_reporting)
         # self.uncommon_elements=['476121']
-        self.logger.debug("Alerts present in TheHive but not in list of opened Lexsi Incidents: {}".format((self.uncommon_elements)))
+        self.logger.debug("Open cases present in TheHive but not in list of opened Lexsi Incidents: {}".format((self.uncommon_elements)))
 
         for element in self.uncommon_elements:
             self.logger.info("Preparing to close the case for {}".format(element))
@@ -231,15 +242,14 @@ class Integration(Main):
             self.query['sourceRef'] = str(element)
             self.logger.debug('Looking for incident %s in TheHive alerts', str(element))
             try:
-                self.alert = self.theHiveConnector.findAlert(self.query)[0]
-                if 'case' in self.alert:
+                if element in self.open_lexsi_cases:
                     # Resolve the case
-                    self.case_id = self.alert['case']
-                    self.logger.debug("AlertID for element {}: {}".format(element, self.case_id))
+                    self.case_id = self.open_lexsi_cases[element]['id']
+                    self.logger.debug("Case id for element {}: {}".format(element, self.case_id))
                     self.logger.debug("Preparing to resolve the case")
                     self.theHiveConnector.closeCase(self.case_id)
                     self.logger.debug("Closed case with id {} for {}".format(self.case_id, element))
 
             except Exception as e:
-                self.logger.error("Could not close case: {}".format(e))
+                self.logger.error("Could not close case: {}".format(e), exc_info=True)
                 continue
