@@ -218,7 +218,7 @@ class Integration(Main):
                 except Exception as e:
                     self.logger.error("Could not find case: {}".format(e), exc_info=True)
                     continue
-        self.logger.info("Lexsi Alerts opened in theHive: {}".format(self.thehiveAlerts))
+        self.logger.debug("Lexsi Alerts opened in theHive: {}".format(self.thehiveAlerts))
         return self.thehiveAlerts
 
     def compare_lists(self, list1, list2):
