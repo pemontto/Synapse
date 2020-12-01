@@ -161,11 +161,16 @@ class Main():
                                 self.logger.debug("Observable {} has matched through {} of the exclusion list. Ignoring observable...".format(artifact['data'], entry))
                                 continue
                     elif artifact['dataType'] == observable_type:
+                        # Initial values
+                        self.match = False
+
                         for extraction_regex in observable_type_config:
                             self.regex = re.compile(extraction_regex)
                             if self.regex.search(artifact['data']):
                                 self.logger.debug("Observable {} with type {} has matched through {} of the exclusion list. Ignoring observable...".format(artifact['data'], observable_type, extraction_regex))
-                                continue
+                                self.match = True
+                        if self.match:
+                            continue
                 # Add artifact to an array again
                 self.artifacts.append(artifact)
 
