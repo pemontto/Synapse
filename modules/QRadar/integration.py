@@ -31,7 +31,7 @@ class Integration(Main):
 
         # Add the offense source explicitly
         if self.enriched['offense_type_str'] == 'Username':
-            self.artifacts.append({'data': offense['offense_source'], 'dataType': 'username', 'message': 'Offense Source', 'tags': ['QRadar']})
+            self.artifacts.append({'data': offense['offense_source'], 'dataType': 'user-account', 'message': 'Offense Source', 'tags': ['QRadar']})
 
         # Add the local and remote sources
         # scrIps contains offense source IPs
@@ -170,10 +170,12 @@ class Integration(Main):
                                           'mail',
                                           'mail_subject',
                                           'other',
+                                          'process_filename',
                                           'regexp',
                                           'registry',
                                           'uri_path',
                                           'url',
+                                          'user-account',
                                           'user-agent']
 
         self.artifacts = []
