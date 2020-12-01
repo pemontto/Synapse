@@ -137,7 +137,7 @@ class Main():
             self.logger.debug(" Observable exclusions found. Checking for matches")
             for artifact in artifacts:
                 # Initial values
-                self.match = False
+                self.match_found = False
 
                 for observable_type, observable_type_config in self.exclusions.items():
                     if observable_type == 'ip' and artifact['dataType'] == 'ip':
@@ -156,13 +156,16 @@ class Main():
                             else:
                                 self.tlp_list_entry = ipaddress.ip_network(entry, strict=False)
                                 self.match = observable_ip in self.tlp_list_entry
+                            # Mark match found when ip matches
+                            if self.match:
+                                self.match_found = True
 
                     elif artifact['dataType'] == observable_type:
                         for extraction_regex in observable_type_config:
                             self.regex = re.compile(extraction_regex)
                             if self.regex.search(artifact['data']):
-                                self.match = True
-                if self.match:
+                                self.match_found = True
+                if self.match_found:
                     self.logger.debug("Observable {} with type {} has matched through {} of the exclusion list. Ignoring observable...".format(artifact['data'], artifact['dataType'], extraction_regex))
                     continue
                 # Add artifact to an array again
