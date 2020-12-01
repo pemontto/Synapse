@@ -129,3 +129,50 @@ class Main():
             return self.artifacts
         else:
             return artifacts
+
+    def checkObservableExclusionList(self, artifacts):
+        self.artifacts = []
+        self.exclusions = self.cfg.get('Automation', 'observable_exclusions', fallback=None)
+        if self.exclusions:
+            self.logger.debug(" Observable exclusions found. Checking for matches")
+            for artifact in artifacts:
+                # Initial values
+                self.match_found = False
+
+                for observable_type, observable_type_config in self.exclusions.items():
+                    if observable_type == 'ip' and artifact['dataType'] == 'ip':
+                        for entry in observable_type_config:
+                            observable_ip = ipaddress.ip_address(artifact['data'])
+
+                            # Match ip with CIDR syntax
+                            if entry[-3:] == "/32":
+                                self.tlp_list_entry = ipaddress.ip_address(entry[:-3])
+                                self.match = observable_ip == self.tlp_list_entry
+                            # Match ip without CIDR syntax
+                            elif "/" not in entry:
+                                self.tlp_list_entry = ipaddress.ip_address(entry)
+                                self.match = observable_ip == self.tlp_list_entry
+                            # Capture actual network entries
+                            else:
+                                self.tlp_list_entry = ipaddress.ip_network(entry, strict=False)
+                                self.match = observable_ip in self.tlp_list_entry
+                            # Mark match found when ip matches
+                            if self.match:
+                                self.match_found = True
+                                self.matched_on = entry
+
+                    elif artifact['dataType'] == observable_type:
+                        for extraction_regex in observable_type_config:
+                            self.regex = re.compile(extraction_regex)
+                            if self.regex.search(artifact['data']):
+                                self.match_found = True
+                                self.matched_on = extraction_regex
+                if self.match_found:
+                    self.logger.debug("Observable {} with type {} has matched through {} of the exclusion list. Ignoring observable...".format(artifact['data'], artifact['dataType'], self.matched_on))
+                    continue
+                # Add artifact to an array again
+                self.artifacts.append(artifact)
+
+            return self.artifacts
+        else:
+            return artifacts

@@ -26,7 +26,7 @@ if cfg.getboolean("Automation", 'log_webhooks', fallback=False):
             # create logs directory if does no exist (typically at first start)
             os.makedirs('logs')
         pathLog = app_dir + '/logs/synapse_received_webhooks.log'
-        webhook_file_handler = logging.handlers.RotatingFileHandler(pathLog, 'a', 1000000, 1)
+        webhook_file_handler = logging.handlers.RotatingFileHandler(pathLog, 'a', 10000000, 10)
         # using the format defined earlier
         webhook_file_handler.setFormatter(webhook_formatter)
         # Adding the file handler
@@ -43,7 +43,7 @@ if not cfg.getboolean('api', 'dockerized'):
         # create logs directory if does no exist (typically at first start)
         os.makedirs('logs')
     pathLog = app_dir + '/logs/synapse.log'
-    file_handler = logging.handlers.RotatingFileHandler(pathLog, 'a', 1000000, 1)
+    file_handler = logging.handlers.RotatingFileHandler(pathLog, 'a', 10000000, 10)
     # using the format defined earlier
     file_handler.setFormatter(formatter)
     # Adding the file handler
