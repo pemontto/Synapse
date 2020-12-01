@@ -159,14 +159,16 @@ class Main():
                             # Mark match found when ip matches
                             if self.match:
                                 self.match_found = True
+                                self.matched_on = entry
 
                     elif artifact['dataType'] == observable_type:
                         for extraction_regex in observable_type_config:
                             self.regex = re.compile(extraction_regex)
                             if self.regex.search(artifact['data']):
                                 self.match_found = True
+                                self.matched_on = extraction_regex
                 if self.match_found:
-                    self.logger.debug("Observable {} with type {} has matched through {} of the exclusion list. Ignoring observable...".format(artifact['data'], artifact['dataType'], extraction_regex))
+                    self.logger.debug("Observable {} with type {} has matched through {} of the exclusion list. Ignoring observable...".format(artifact['data'], artifact['dataType'], self.matched_on))
                     continue
                 # Add artifact to an array again
                 self.artifacts.append(artifact)
