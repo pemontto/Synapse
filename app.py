@@ -89,7 +89,7 @@ def listenWebhook():
         try:
             webhook = request.get_json()
             logger.debug("Webhook: %s" % webhook)
-            if cfg.get("api", 'log_webhooks', fallback=False):
+            if cfg.getboolean("Automation", 'log_webhooks', fallback=False):
                 webhook_logger.info(webhook)
             workflowReport = manageWebhook(webhook, cfg, automation_config)
             if workflowReport['success']:
