@@ -493,7 +493,7 @@ class QRadarConnector:
 
             if (response.code == 200):
                 #response_body is a list of dict
-                if response_body[0]['status'] == 'OPEN':
+                if len(response_body) > 0 and response_body[0]['status'] == 'OPEN':
                     return True
                 else:
                     return False
