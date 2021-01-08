@@ -10,6 +10,8 @@ class Integration(Main):
         super().__init__()
         self.azureSentinelConnector = AzureSentinelConnector(self.cfg)
         self.theHiveConnector = TheHiveConnector(self.cfg)
+        # Add incident labels as tags
+        self.importTags = self.cfg.get('AzureSentinel', 'import_tags', fallback=True)
 
     def craftAlertDescription(self, incident):
         """
@@ -22,7 +24,7 @@ class Integration(Main):
         self.description = ""
 
         # Add url to incident
-        self.url = ('[%s](%s)' % (str(incident['properties']['incidentNumber']), str(incident['properties']['incidentUrl'])))
+        self.url = ('[View incident %s](%s) in Sentinel' % (str(incident['properties']['incidentNumber']), str(incident['properties']['incidentUrl'])))
         self.description += '#### Incident: \n - ' + self.url + '\n\n'
 
         # Format associated rules
@@ -75,6 +77,55 @@ class Integration(Main):
 
         return self.description
 
+    def extractEntities(self, incident):
+        """
+            From the incident metadata, extract the correlation entities
+            for TheHive
+        """
+        self.logger.debug('extractEntities starts')
+
+        entity_mapping = {
+            "Account": "other",
+            "File": "filename",
+            "FileHash": "hash",
+            "Host": "hostname",
+            "Ip": "ip",
+            "Url": "url",
+        }
+
+        entities_uri = f"{incident['id']}/entities"
+        entity_info = self.azureSentinelConnector.getEntities(entities_uri)
+
+        for entity in entity_info['entities']:
+            artifact = {
+                'data': entity['properties']['friendlyName'],
+                'dataType': entity_mapping.get(entity['kind'], 'other'),
+                'message': f"Azure Sentinel {entity['kind']} artifact",
+                'tags': ['AzureSentinel'],
+                'tlp': 2,
+            }
+
+            if 'additionalData' in entity["properties"]:
+                additional_data = '\n'.join(f"{k}: {v}" for k, v in entity["properties"]['additionalData'].items())
+                artifact['message'] += f"\n\n{additional_data}"
+
+            if entity['kind'] == "Account":
+                if 'isDomainJoined' in entity['properties']:
+                    artifact['tags'].append('DomainJoined')
+                artifact['data'] = entity['properties']['accountName']
+
+            elif entity['kind'] == "Malware":
+                if 'category' in entity['properties']:
+                    artifact['tags'].append(entity['properties']['category'])
+
+            elif entity['kind'] == "FileHash":
+                artifact['data'] = entity['properties']['hashValue']
+                if 'algorithm' in entity['properties']:
+                    artifact['tags'].append(entity['properties']['algorithm'])
+
+            yield artifact
+
+
     def sentinelIncidentToHiveAlert(self, incident):
 
         def getHiveSeverity(incident):
@@ -96,26 +147,33 @@ class Integration(Main):
         # Setup Tags
         self.tags = ['AzureSentinel', 'incident', 'Synapse']
 
-        # Skip for now
+        if self.importTags:
+            for tag in incident["properties"].get("labels", []):
+                self.tags.append(tag["labelName"])
+
+        # # Skip for now
         self.artifacts = []
+        # # Extract entities
+        for artifact in self.extractEntities(incident):
+            self.artifacts.append(self.theHiveConnector.craftAlertArtifact(**artifact))
 
         # Retrieve the configured case_template
         self.sentinelCaseTemplate = self.cfg.get('AzureSentinel', 'case_template')
 
         # Build TheHive alert
         self.alert = self.theHiveConnector.craftAlert(
-            "{}, {}".format(incident['properties']['incidentNumber'], incident['properties']['title']),
-            self.craftAlertDescription(incident),
-            getHiveSeverity(incident),
-            self.azureSentinelConnector.formatDate("alert_timestamp", incident['properties']['createdTimeUtc']),
-            self.tags,
-            2,
-            'New',
-            'internal',
-            'Azure_Sentinel_incidents',
-            str(incident['name']),
-            self.artifacts,
-            self.sentinelCaseTemplate)
+            title="{}: {}".format(incident['properties']['incidentNumber'], incident['properties']['title']),
+            description=self.craftAlertDescription(incident),
+            severity=getHiveSeverity(incident),
+            date=self.azureSentinelConnector.formatDate("alert_timestamp", incident['properties']['createdTimeUtc']),
+            tags=self.tags,
+            tlp=2,
+            status='New',
+            type='internal',
+            source='Azure_Sentinel_incidents',
+            sourceRef=str(incident['name']),
+            artifacts=self.artifacts,
+            caseTemplate=self.sentinelCaseTemplate)
 
         return self.alert
 
