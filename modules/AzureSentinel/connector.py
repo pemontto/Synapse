@@ -2,7 +2,7 @@ import logging
 import requests
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from dateutil import tz
 
 class AzureSentinelConnector:
@@ -27,9 +27,26 @@ class AzureSentinelConnector:
         self.tenant_id = self.cfg.get('AzureSentinel', 'tenant_id')
         self.client_id = self.cfg.get('AzureSentinel', 'client_id')
         self.client_secret = self.cfg.get('AzureSentinel', 'client_secret')
-        self.base_url = 'https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.OperationalInsights/workspaces/{}/providers/Microsoft.SecurityInsights'.format(self.subscription_id, self.resource_group, self.workspace)
+        self.lookback = self.cfg.get('AzureSentinel', 'lookback', fallback=False)
+        self.base_url = f'https://management.azure.com/subscriptions/{self.subscription_id}/resourceGroups/{self.resource_group}/providers/Microsoft.OperationalInsights/workspaces/{self.workspace}/providers/Microsoft.SecurityInsights'
 
         self.bearer_token = self.getBearerToken()
+
+        if self.lookback:
+            # try:
+            units = self.lookback[-1]
+            if units in "hH":
+                self.lookback = timedelta(hours=int(self.lookback[:-1]))
+                self.logger.debug(f"Azure Sentinel lookback set to {self.lookback.days} days and {int(self.lookback.seconds/60/60)} hours")
+            elif units in "dD":
+                self.lookback = timedelta(days=int(self.lookback[:-1]))
+                self.logger.debug(f"Azure Sentinel lookback set to {self.lookback.days} days")
+            else:
+                raise ValueError(self.response.content)
+            # except Exception as e:
+            #     self.logger.error(f"Could not calculate Sentinel timedelta from lookback: {self.lookback}. Ignoring lookback...", exc_info=True)
+            #     self.lookback = False
+
 
     def getBearerToken(self):
         self.url = 'https://login.microsoftonline.com/{}/oauth2/token'.format(self.tenant_id)
@@ -64,7 +81,6 @@ class AzureSentinelConnector:
         ntz_formatted_time = formatted_time.astimezone(new_timezone)
 
         if target == "description":
-
             #Create a string from time object
             string_formatted_time = ntz_formatted_time.strftime('%Y-%m-%d %H:%M:%S')
 
@@ -215,7 +231,15 @@ class AzureSentinelConnector:
         # Empty array for incidents
         self.incidents = []
 
-        self.url = self.base_url + '/incidents?api-version=2020-01-01&%24filter=(properties%2Fstatus%20eq%20\'New\'%20or%20properties%2Fstatus%20eq%20\'Active\')&%24orderby=properties%2FcreatedTimeUtc%20desc'
+        # Query only for recently updated incidents if lookback is set
+        query_filter = "(properties/status eq 'New' or properties/status eq 'Active')"
+        if self.lookback:
+            lookback_date = datetime.utcnow() - self.lookback
+            query_filter += f" and (properties/lastModifiedTimeUtc ge {lookback_date.isoformat()}Z)"
+
+        order_by = "properties/createdTimeUtc desc"
+
+        self.url = f'{self.base_url}/incidents?api-version=2020-01-01&$filter={requests.utils.quote(query_filter)}&$orderby={requests.utils.quote(order_by)}'
 
         # Adding empty header as parameters are being sent in payload
         self.headers = {
@@ -249,6 +273,7 @@ class AzureSentinelConnector:
             self.logger.error('Failed to retrieve incidents', exc_info=True)
             raise
 
+        self.logger.debug(f'{len(self.incidents)} AzureSentinel incidents retrieved')
         return self.incidents
 
     def getRule(self, uri):

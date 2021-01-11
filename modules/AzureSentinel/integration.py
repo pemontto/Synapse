@@ -68,11 +68,12 @@ class Integration(Main):
             '|                         |               |\n' +
             '| ----------------------- | ------------- |\n' +
             '| **Start Time**          | ' + str(self.azureSentinelConnector.formatDate("description", incident['properties']['createdTimeUtc'])) + ' |\n' +
-            '| **incident ID**          | ' + str(incident['properties']['incidentNumber']) + ' |\n' +
+            '| **incident ID**         | ' + str(incident['properties']['incidentNumber']) + ' |\n' +
             '| **Description**         | ' + str(incident['properties']['description'].replace('\n', '')) + ' |\n' +
-            '| **incident Type**        | ' + str(incident['type']) + ' |\n' +
-            '| **incident Source**      | ' + str(incident['properties']['additionalData']['alertProductNames']) + ' |\n' +
-            '| **incident Status**      | ' + str(incident['properties']['status']) + ' |\n' +
+            '| **incident Type**       | ' + str(incident['type']) + ' |\n' +
+            '| **incident Source**     | ' + ', '.join(incident['properties']['additionalData'].get('alertProductNames', [])) + ' |\n' +
+            '| **incident Status**     | ' + str(incident['properties']['status']) + ' |\n' +
+            '| **Tactics**             | ' + ', '.join(incident['properties']['additionalData'].get('tactics', [])) + ' |\n' +
             '\n\n\n\n')
 
         return self.description
@@ -112,6 +113,14 @@ class Integration(Main):
             if entity['kind'] == "Account":
                 if 'isDomainJoined' in entity['properties']:
                     artifact['tags'].append('DomainJoined')
+                # If username is an email
+                if 'upnSuffix' in entity['properties']:
+                    artifact['data'] = f"{entity['properties']['accountName']}@{entity['properties']['upnSuffix']}"
+                    artifact['dataType'] = 'mail'
+                    yield artifact
+                    # Set type back to account
+                    artifact['dataType'] = entity_mapping.get(entity['kind'], 'other')
+
                 artifact['data'] = entity['properties']['accountName']
 
             elif entity['kind'] == "Malware":
